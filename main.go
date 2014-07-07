@@ -1,11 +1,9 @@
 package main
 
 import (
-	//"bufio"
-	"fmt"
 	"github.com/jonomacd/jariowoods/logic"
+	termbox "github.com/nsf/termbox-go"
 	"os"
-	"time"
 )
 
 func main() {
@@ -16,22 +14,36 @@ func main() {
 	logic.DropNew(b, "player1")
 	logic.PrintBoard(b)
 	cntr := make(chan string)
+	err := termbox.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer termbox.Close()
 	go func() {
-		in := make([]byte, 40)
+
 		for {
-			in = make([]byte, 40)
+			switch ev := termbox.PollEvent(); ev.Type {
+			case termbox.EventKey:
 
-			os.Stdin.Read(in)
+				if ev.Key == termbox.KeyCtrlC {
+					termbox.Close()
+					os.Exit(0)
+				} else if ev.Key == termbox.KeyArrowLeft {
 
-			fmt.Println("cruft", string(in))
-			if string(in) == "d" {
-				cntr <- "right"
+					cntr <- "left"
+				} else if ev.Key == termbox.KeyArrowRight {
+
+					cntr <- "right"
+				} else if ev.Ch == 'a' {
+
+					cntr <- "a"
+				} else if ev.Ch == 'b' {
+
+					cntr <- "b"
+				}
+			case termbox.EventError:
+				panic(ev.Err)
 			}
-			if string(in) == "a" {
-				cntr <- "left"
-			}
-
-			time.Sleep(100 * time.Millisecond)
 		}
 
 	}()
