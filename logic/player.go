@@ -1,13 +1,30 @@
 package logic
 
-type PlayerState struct {
+type PlayerLocation struct {
 	Id string
 	X  int
 	Y  int
 }
 
-var PlayerStates map[string]*PlayerState
+// This is a shortcut to find where the player is, otherwise we
+// would need to loop through EVERYTHING!
+var PlayerLocations map[string]*PlayerLocation
 
 func init() {
-	PlayerStates = make(map[string]*PlayerState)
+	PlayerLocations = make(map[string]*PlayerLocation)
+}
+
+type Player struct {
+	Id          string
+	Facing      int
+	Carrying    []Actor
+	PlayerState string
+}
+
+func (p *Player) State() string {
+	return p.PlayerState
+}
+
+func (p *Player) SetState(s string) {
+	p.PlayerState = s
 }

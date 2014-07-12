@@ -11,7 +11,9 @@ func main() {
 	logic.PrintBoard(b)
 	logic.FillBoard(b, 0)
 	logic.PrintBoard(b)
-	logic.DropNew(b, "player1")
+	logic.DropNew(b, &logic.Player{
+		Id: "player1",
+	})
 	logic.PrintBoard(b)
 	cntr := make(chan string)
 	err := termbox.Init()
@@ -34,6 +36,12 @@ func main() {
 				} else if ev.Key == termbox.KeyArrowRight {
 
 					cntr <- "right"
+				} else if ev.Key == termbox.KeyArrowUp {
+
+					cntr <- "up"
+				} else if ev.Key == termbox.KeyArrowDown {
+
+					cntr <- "down"
 				} else if ev.Ch == 'a' {
 
 					cntr <- "a"
