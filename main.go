@@ -45,7 +45,7 @@ func main() {
 				} else if ev.Ch == 'a' {
 
 					cntr <- "a"
-				} else if ev.Ch == 'b' {
+				} else if ev.Ch == 's' {
 
 					cntr <- "b"
 				}
