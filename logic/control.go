@@ -61,6 +61,10 @@ func move(b Board, playerId string, direction int) Board {
 		if x != 0 {
 			for check := x - 1; check >= 0; check-- {
 				if len(b[check][y].Actors) > 0 {
+					beside, _ := isBeside(b, direction, check, y)
+					if beside {
+						break
+					}
 					b[check][y+direction].Actors = append(b[check][y+direction].Actors, b[check][y].Actors[kk])
 					b[check][y].Actors = make([]Actor, 0)
 				} else {
@@ -227,16 +231,45 @@ func pickUpOne(b Board, playerId string) Board {
 				return b
 			}
 
+			beside, err = isBeside(b, direction, x-2, y)
+			if err != nil {
+				return b
+			}
+
+			if !beside {
+				// Okay, nothing in the way
+				b[x-2][y+direction].Actors = b[x-1][y].Actors
+				b[x-1][y].Actors = make([]Actor, 0)
+				return b
+			}
+
 			return b
 		}
 
 		if len(b[x][y+direction].Actors) == 0 {
+			// Nothing to pick up beside, let's check below
+			b = pickUpBelow(b, x, y, direction)
 			return b
 		}
 
 		b[x-1][y].Actors = b[x][y+direction].Actors
 		b[x][y+direction].Actors = make([]Actor, 0)
 
+	}
+	return b
+}
+
+func pickUpBelow(b Board, x, y, direction int) Board {
+
+	below, err := isBelow(b, x, y+direction)
+	if err != nil {
+		return b
+	}
+
+	if below {
+		// we can pick something up
+		b[x-1][y].Actors = b[x+1][y+direction].Actors
+		b[x+1][y+direction].Actors = make([]Actor, 0)
 	}
 	return b
 }
@@ -288,7 +321,11 @@ func pickUpAll(b Board, playerId string) Board {
 					return b
 				}
 				if beside {
-					return b
+					beside, _ = isBeside(b, direction, x-2, y)
+					if beside {
+						return b
+					}
+					dropX--
 				}
 				dropX--
 			}
@@ -306,6 +343,7 @@ func pickUpAll(b Board, playerId string) Board {
 				}
 				fromX--
 			}
+
 			return b
 		}
 
@@ -328,9 +366,11 @@ func pickUpAll(b Board, playerId string) Board {
 				placeX--
 				pickupX--
 			}
-
+			// We've pick it up
+			return b
 		}
-
+		// Nothing to pick up beside, let's check below
+		b = pickUpBelow(b, x, y, direction)
 	}
 	return b
 }

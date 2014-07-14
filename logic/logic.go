@@ -7,7 +7,6 @@ import (
 	termbox "github.com/nsf/termbox-go"
 )
 
-var prune rune = 'p'
 var FrameRate time.Duration = time.Millisecond * 16
 
 type Cell struct {
@@ -61,9 +60,18 @@ func FillBoard(board Board, fillHeight int) Board {
 
 	for ii := Height - 1; ii >= fillHeight; ii-- {
 		for jj, _ := range board[ii] {
+			color := "red"
+			switch rand.Intn(4) {
+			case 0:
+				color = "green"
+			case 1:
+				color = "blue"
+			case 2:
+				color = "yellow"
+			}
 			board[ii][jj].Actors = append(board[ii][jj].Actors, &Monster{
 				MonsterState: "rest",
-				Color:        "blue",
+				Color:        color,
 			})
 		}
 	}
@@ -77,8 +85,27 @@ func DropNew(board Board, newType Actor) Board {
 	if len(board[0][drop].Actors) == 0 {
 		switch v := newType.(type) {
 		case *Monster:
-			newType.(*Monster).Color = "red"
+			color := "red"
+			switch rand.Intn(4) {
+			case 0:
+				color = "green"
+			case 1:
+				color = "blue"
+			case 2:
+				color = "yellow"
+			}
+			newType.(*Monster).Color = color
 		case *Bomb:
+			color := "red"
+			switch rand.Intn(4) {
+			case 0:
+				color = "green"
+			case 1:
+				color = "blue"
+			case 2:
+				color = "yellow"
+			}
+			newType.(*Bomb).Color = color
 		case *Player:
 			PlayerLocations[newType.(*Player).Id] = &PlayerLocation{
 				Id: v.Id,
@@ -105,6 +132,7 @@ func PrintBoard(board Board) {
 		for jj, _ := range board[ii] {
 			for _, a := range board[ii][jj].Actors {
 				rn := '*'
+				color := termbox.ColorDefault
 				if p, ok := a.(*Player); ok {
 					if p.Facing == 1 {
 						rn = 'p'
@@ -121,7 +149,34 @@ func PrintBoard(board Board) {
 						rn = 'ٽ'
 					}
 				}
-				termbox.SetCell(jj, ii, rn, termbox.ColorDefault, termbox.ColorDefault)
+				if m, ok := a.(*Monster); ok {
+					switch m.Color {
+					case "red":
+						color = termbox.ColorRed
+					case "blue":
+						color = termbox.ColorBlue
+					case "yellow":
+						color = termbox.ColorCyan
+					case "green":
+						color = termbox.ColorGreen
+					}
+				}
+
+				if m, ok := a.(*Bomb); ok {
+					switch m.Color {
+					case "red":
+						color = termbox.ColorRed
+					case "blue":
+						color = termbox.ColorBlue
+					case "yellow":
+						color = termbox.ColorCyan
+					case "green":
+						color = termbox.ColorGreen
+					}
+					rn = 'o'
+				}
+
+				termbox.SetCell(jj, ii, rn, color, termbox.ColorDefault)
 			}
 			if len(board[ii][jj].Actors) == 0 {
 				termbox.SetCell(jj, ii, '-', termbox.ColorDefault, termbox.ColorDefault)
@@ -143,6 +198,9 @@ func RunBoard(b Board, control chan string) {
 	for {
 
 		// Pre Input actions
+		// check for blowups (TODO this does not work!)
+		checkAllForExplosions(b)
+
 		select {
 		case <-monsterFallTick.C:
 			drop := false
@@ -162,6 +220,8 @@ func RunBoard(b Board, control chan string) {
 								} else {
 									b[ii][jj].Actors[kk].SetState("rest")
 								}
+							} else {
+								b[ii][jj].Actors[kk].SetState("rest")
 							}
 						}
 					}
@@ -199,6 +259,8 @@ func RunBoard(b Board, control chan string) {
 								} else {
 									b[ii][jj].Actors[kk].SetState("rest")
 								}
+							} else {
+								b[ii][jj].Actors[kk].SetState("rest")
 							}
 						}
 					}
@@ -208,7 +270,6 @@ func RunBoard(b Board, control chan string) {
 		}
 
 		// Input Actions
-		prune = 'p'
 		select {
 		case c := <-control:
 			switch c {
@@ -229,9 +290,9 @@ func RunBoard(b Board, control chan string) {
 					slow = true
 				}
 			case "a":
-				prune = 'a'
+				pickUpOne(b, "player1")
 			case "b":
-				prune = 'b'
+				pickUpAll(b, "player1")
 			}
 
 		default:
@@ -239,8 +300,12 @@ func RunBoard(b Board, control chan string) {
 
 		// Post Input Actions
 		if !dropped {
-			DropNew(b, &Monster{})
-
+			n := rand.Intn(10)
+			if n >= 4 {
+				DropNew(b, &Monster{})
+			} else {
+				DropNew(b, &Bomb{})
+			}
 			dropped = true
 		}
 
@@ -260,4 +325,206 @@ func DelayDraw(sinceLastFrame time.Time) {
 		// Wait until time to draw
 		time.Sleep(nextFrame.Sub(now))
 	}
+}
+
+func checkAllForExplosions(b Board) {
+	for xx := 0; xx < len(b); xx++ {
+		for yy := 0; yy < len(b[xx]); yy++ {
+			for kk, _ := range b[xx][yy].Actors {
+				if bomb, ok := b[xx][yy].Actors[kk].(*Bomb); ok {
+					c := bomb.Color
+
+					// set up to explode structure
+					toExplode := make([][]Cell, 4)
+					for ll, _ := range toExplode {
+						toExplode[ll] = make([]Cell, 1)
+						toExplode[ll][0] = Cell{
+							X: xx,
+							Y: yy,
+						}
+					}
+					for direction := 0; direction < 8; direction++ {
+						toExplode = checkLineForExplosions(b, xx, yy, direction, toExplode, c)
+					}
+					for direction, _ := range toExplode {
+						if len(toExplode[direction]) >= 3 {
+							for _, cell := range toExplode[direction] {
+								b[cell.X][cell.Y].Actors = make([]Actor, 0)
+							}
+						}
+					}
+
+				}
+			}
+		}
+	}
+}
+
+func checkLineForExplosions(b Board, xx, yy, direction int, toExplode [][]Cell, c string) [][]Cell {
+
+	ym := yy
+	ymStopFunc := func(checky int) bool {
+		return true
+	}
+	ymUpdateFunc := func(updatey int) int {
+		return updatey
+	}
+
+	xm := xx
+	xmStopFunc := func(checkx int) bool {
+		return true
+	}
+	xmUpdateFunc := func(updatex int) int {
+		return updatex
+	}
+
+	if direction == 0 {
+		// Left
+		ym = yy - 1
+		ymStopFunc = func(checky int) bool {
+			return checky >= 0
+		}
+		ymUpdateFunc = func(updatey int) int {
+			return updatey - 1
+		}
+
+	} else if direction == 1 {
+		// Right
+		ym = yy + 1
+		ymStopFunc = func(checky int) bool {
+			return checky < len(b[0])
+		}
+		ymUpdateFunc = func(updatey int) int {
+			return updatey + 1
+		}
+	} else if direction == 2 {
+		// Up
+		xm = xx - 1
+		xmStopFunc = func(checkx int) bool {
+			return checkx >= 0
+		}
+		xmUpdateFunc = func(updatex int) int {
+			return updatex - 1
+		}
+	} else if direction == 3 {
+		// Down
+		xm = xm + 1
+		xmStopFunc = func(checkx int) bool {
+			return checkx < len(b)
+		}
+		xmUpdateFunc = func(updatex int) int {
+			return updatex + 1
+		}
+	} else if direction == 4 {
+		// Left up
+		ym = yy - 1
+		xm = xx - 1
+		ymStopFunc = func(checky int) bool {
+			return checky >= 0
+		}
+		ymUpdateFunc = func(updatey int) int {
+			return updatey - 1
+		}
+		xmStopFunc = func(checky int) bool {
+			return checky >= 0
+		}
+		xmUpdateFunc = func(updatey int) int {
+			return updatey - 1
+		}
+
+	} else if direction == 5 {
+		// Right Up
+		ym = yy + 1
+		xm = xx + 1
+		ymStopFunc = func(checky int) bool {
+			return checky < len(b[0])
+		}
+		ymUpdateFunc = func(updatey int) int {
+			return updatey + 1
+		}
+		xmStopFunc = func(checky int) bool {
+			return checky < len(b)
+		}
+		xmUpdateFunc = func(updatey int) int {
+			return updatey + 1
+		}
+	} else if direction == 6 {
+		// Up
+		xm = xx - 1
+		ym = yy + 1
+		xmStopFunc = func(checkx int) bool {
+			return checkx >= 0
+		}
+		xmUpdateFunc = func(updatex int) int {
+			return updatex - 1
+		}
+
+		ymStopFunc = func(checky int) bool {
+			return checky < len(b[0])
+		}
+		ymUpdateFunc = func(updatey int) int {
+			return updatey + 1
+		}
+	} else if direction == 7 {
+		// Down
+		xm = xm + 1
+		ym = yy - 1
+		xmStopFunc = func(checkx int) bool {
+			return checkx < len(b)
+		}
+		xmUpdateFunc = func(updatex int) int {
+			return updatex + 1
+		}
+		ymStopFunc = func(checky int) bool {
+			return checky >= 0
+		}
+		ymUpdateFunc = func(updatey int) int {
+			return updatey - 1
+		}
+	}
+
+	direction = (direction / 2)
+
+loop:
+	for {
+
+		if !xmStopFunc(xm) || !ymStopFunc(ym) {
+			break loop
+		}
+
+		if len(b[xm][ym].Actors) > 0 {
+			for nn, _ := range b[xm][ym].Actors {
+				switch b[xm][ym].Actors[nn].(type) {
+				case *Bomb:
+					if b[xm][ym].Actors[nn].(*Bomb).Color == c {
+						toExplode[direction] = append(toExplode[direction], Cell{
+							X: xm,
+							Y: ym,
+						})
+					} else {
+						break loop
+					}
+				case *Monster:
+					if b[xm][ym].Actors[nn].(*Monster).Color == c {
+						toExplode[direction] = append(toExplode[direction], Cell{
+							X: xm,
+							Y: ym,
+						})
+					} else {
+						break loop
+					}
+				default:
+					break loop
+				}
+			}
+		} else {
+			break loop
+		}
+
+		xm = xmUpdateFunc(xm)
+		ym = ymUpdateFunc(ym)
+
+	}
+
+	return toExplode
 }
